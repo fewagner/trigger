@@ -1,2 +1,2 @@
 # trigger
-Numba-accelerated trigger for continuously sampled sensor signals.
+Numba-accelerated peak detection for continuously sampled sensor signals.
