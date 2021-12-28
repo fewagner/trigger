@@ -131,7 +131,8 @@ class VTrigger():
         self.path = path
 
     def setup(self, batchsize=1048576, samples=None, threshold=5, lag=512, look_ahead=512,
-              adc_filters=None, dac_channels=None, adc_channels=None):
+              adc_filters=None, dac_channels=None, adc_channels=None,
+              adc_fixed_var=None, dac_fixed_var=None):
         self.header, self.keys, self.adc_bits, self.dac_bits, self.dt_tcp = read_header(self.path)
         if samples is None:
             self.samples = int((os.path.getsize(self.path) - self.header.nbytes)/self.dt_tcp.itemsize)
@@ -160,20 +161,31 @@ class VTrigger():
         else:
             self.adc_filters = [None for i in self.adc_channels]
 
+        if adc_fixed_var is None:
+            self.adc_fixed_var = [0 for i in self.adc_channels]
+        else:
+            self.adc_fixed_var = adc_fixed_var
+        if dac_fixed_var is None:
+            self.dac_fixed_var = [0 for i in self.dac_channels]
+        else:
+            self.dac_fixed_var = dac_fixed_var
+
     def go(self):
         triggers_dac = []
-        for k in self.dac_channels:
-            triggers_dac.append(self.trigger(k, None, self.dac_bits))
+        for i, k in enumerate(self.dac_channels):
+            triggers_dac.append(self.trigger(k, None, self.dac_bits,
+                                             fixed_var=self.dac_fixed_var[i]))
 
         triggers_adc = []
         for i, k in enumerate(self.adc_channels):
-            triggers_adc.append(self.trigger(k, self.adc_filters[i], self.adc_bits))
+            triggers_adc.append(self.trigger(k, self.adc_filters[i], self.adc_bits,
+                                             fixed_var=self.adc_fixed_var[i]))
 
         return triggers_dac, triggers_adc
 
-    def trigger(self, key, filter, bits):
+    def trigger(self, key, filter, bits, fixed_var=0):
         mean, variance = None, None
-        signal, heights, all_means, all_vars = [], [], [], []
+        signal, heights, all_means, all_vars, time_high, time_low = [], [], [], [], [], []
         if filter is not None:
             filter_length = filter.shape[0]
             overlap = np.zeros(filter_length - 1)
@@ -194,16 +206,20 @@ class VTrigger():
                 variance = var(stream[:self.lag])
 
             signal_, heights_, all_means_, all_vars_ = get_triggers(stream, self.lag, self.threshold,
-                                                                mean, variance, self.look_ahead)
+                                                                mean, variance, self.look_ahead,
+                                                                    fixed_var)
             mean, variance = np.mean(stream[-self.lag:]), var(stream[-self.lag:])
-            signal.extend(signal_)
+            signal.extend(np.array(signal_) + b * self.batchsize)
             heights.extend(heights_)
             all_means.extend(all_means_)
             all_vars.extend(all_vars_)
+            if 'TimeHigh' in self.keys and 'TimeLow' in self.keys:
+                time_high.extend(data['TimeHigh'][signal_])
+                time_low.extend(data['TimeLow'][signal_])
 
         signal = np.array(signal)
         heights = np.array(heights)
         all_means = np.array(all_means)
         all_vars = np.array(all_vars)
 
-        return signal, heights, all_means, all_vars
+        return signal, heights, all_means, all_vars, time_high, time_low

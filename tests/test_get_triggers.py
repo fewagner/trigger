@@ -30,7 +30,8 @@ if __name__ == '__main__':
                                              threshold=threshold,
                                              init_mean=np.mean(y[:lag]),
                                              init_var=var(y[:lag]),
-                                             look_ahead=100)
+                                             look_ahead=100,
+                                             fixed_var=0.01)
 
     print(signal)
 

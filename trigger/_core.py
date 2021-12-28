@@ -27,7 +27,7 @@ def sub_from_moments(x_new, mean, var, n):
     return mean, var, n
 
 @nb.njit
-def find_peaks(array, lag, threshold, init_mean, init_var):
+def find_peaks(array, lag, threshold, init_mean, init_var, fixed_var=0):
 
     n = lag
     if init_mean is None:
@@ -45,6 +45,9 @@ def find_peaks(array, lag, threshold, init_mean, init_var):
 
     for i in range(array.shape[0]):
 
+        if fixed_var > 0:
+            variance = fixed_var
+
         if np.abs(array[i] - mean) > threshold * np.sqrt(variance):
             if array[i] > mean:
                 signal[i] = 1
@@ -61,7 +64,7 @@ def find_peaks(array, lag, threshold, init_mean, init_var):
 
 
 @nb.njit
-def get_triggers(array, lag, threshold, init_mean, init_var, look_ahead):
+def get_triggers(array, lag, threshold, init_mean, init_var, look_ahead, fixed_var=0):
 
     n = lag
     if init_mean is None:
@@ -80,6 +83,9 @@ def get_triggers(array, lag, threshold, init_mean, init_var, look_ahead):
     all_vars = []
 
     for i in range(array.shape[0]):
+
+        if fixed_var > 0:
+            variance = fixed_var
 
         if array[i] - mean > threshold * np.sqrt(variance):
             if block == 0:
