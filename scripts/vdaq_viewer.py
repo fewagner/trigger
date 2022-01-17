@@ -9,12 +9,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('path_bin', type=str, default='../../COSINUS_DATA/data_newOP_ncal_57Co_002.bin', help='an integer for the accumulator')
-    parser.add_argument('--plt_sec', type=int, default=10, help='the number of seconds to plot')
+    parser.add_argument('--plt_sec', type=int, default=7, help='the number of seconds to plot')
     parser.add_argument('--rec_freq', type=int, default=1000000, help='the record sampling frequency')
-    parser.add_argument('--plt_freq', type=int, default=250, help='the sampling frequency in the plot')
-    parser.add_argument('--start_from', type=int, default=0, help='the second to start the plot from')
-    parser.add_argument('--plt_dac_channels', type=int, nargs='+', default=[1, 2, 3, 4], help='the dac channels to include in the plot')
-    parser.add_argument('--plt_adc_channels', type=int, nargs='+', default=[1, 2, 3], help='the adc channels to include in the plot')
+    parser.add_argument('--plt_freq', type=int, default=2500, help='the sampling frequency in the plot')
+    parser.add_argument('--start_from', type=int, default=1633, help='the second to start the plot from')
+    parser.add_argument('--plt_dac_channels', type=int, nargs='+', default=[1,3], help='the dac channels to include in the plot')
+    parser.add_argument('--plt_adc_channels', type=int, nargs='+', default=[], help='the adc channels to include in the plot')
     args = vars(parser.parse_args())
 
     # --------------------------------------------------------
@@ -50,9 +50,11 @@ if __name__ == '__main__':
     # time axis
     t = (1 / args['plt_freq']) * np.linspace(0, plt_steps - 1, plt_steps) + args['start_from']
 
-    # Plot ADCs
+    # Plot Channels
     plt.close()
     fig, axes = plt.subplots(len(plot_adc_channels) + len(plot_dac_channels), 1, sharex='col')
+    if len(plot_adc_channels) + len(plot_dac_channels) == 1:
+        axes = [axes]
     for i, c in enumerate(plot_adc_channels):
         axes[i].plot(t, tr.volt(np.mean(data[c].reshape(-1, down_rate), axis=1), bits=adc_bits))
         axes[i].set_title(c)

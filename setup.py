@@ -21,7 +21,6 @@ setup(
                       'scipy>=1.6',
                       'numba>=0.54',
                       'tqdm>=4.62',
-                      'pyfftw',
                       ],
     python_requires='>=3.8',
 )

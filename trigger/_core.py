@@ -24,6 +24,8 @@ def sub_from_moments(x_new, mean, var, n):
     n -= 1
     mean = mean_n_minus_one
     var = var_n_minus_one
+    if var < 0:  # in case of numerical issues
+        var = 1e-8
     return mean, var, n
 
 @nb.njit
@@ -92,7 +94,7 @@ def get_triggers(array, lag, threshold, init_mean, init_var, look_ahead, fixed_v
                 height = np.max(array[i:i+look_ahead])
                 idx = i + np.argmax(array[i:i+look_ahead])
                 signal.append(idx)
-                heights.append(height - mean)
+                heights.append(height - 2 * np.sqrt(variance) - mean)
                 all_means.append(mean)
                 all_vars.append(variance)
                 block += look_ahead
@@ -109,3 +111,48 @@ def get_triggers(array, lag, threshold, init_mean, init_var, look_ahead, fixed_v
 def var(x):
     m = np.mean(x)
     return 1 / (x.shape[0] - 1) * np.sum((x - m) ** 2)
+
+# ----------------
+
+#@nb.njit
+def update_running_moments(x_new, mean, var, gamma):
+    var = (1-gamma) * var + gamma * (mean - x_new)**2
+    mean = (1-gamma) * mean + gamma * x_new
+    return mean, var
+
+
+#@nb.njit
+def find_peaks_rm(array, lag, threshold, init_mean, init_var, fixed_std=0):
+
+    gamma = np.exp(-1/lag)
+    print(gamma)
+    if init_mean is None:
+        mean = np.mean(array[:lag])
+    else:
+        mean = init_mean
+    if init_var is None:
+        variance = var(array[:lag])
+    else:
+        variance = init_var
+
+    signal = np.zeros(len(array))
+    all_means = np.full(len(array), mean)
+    all_vars = np.full(len(array), variance)
+
+    for i in range(array.shape[0]):
+
+        if fixed_std > 0:
+            variance = fixed_std ** 2
+
+        if (array[i] - mean)**2 > threshold * variance:
+            if array[i] > mean:
+                signal[i] = 1
+            else:
+                signal[i] = -1
+
+        if i >= lag:
+            mean, variance = update_running_moments(array[i], mean, variance, gamma)
+        all_means[i] = mean
+        all_vars[i] = variance
+
+    return signal, all_means, all_vars

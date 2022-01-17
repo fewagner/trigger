@@ -7,6 +7,7 @@ from scipy.signal import oaconvolve
 import os
 from tqdm.auto import trange
 from ._core import get_triggers, var
+import sys
 
 def bin(s, nmbr_bits=None):
     """
@@ -48,8 +49,7 @@ def read_header(path_bin):
                           ('numOfBytes', 'i4'),
                           ('downsamplingFactor', 'i4'),
                           ('channelsAndFormat', 'i4'),
-                          ('timestamp_low', 'i4'),
-                          ('timestamp_high', 'i4'),
+                          ('timestamp', 'uint64'),
                           ])
 
     header = np.fromfile(path_bin, dtype=dt_header, count=1)[0]
@@ -60,8 +60,7 @@ def read_header(path_bin):
 
     # bit 0: Timestamp uint64
     if channelsAndFormat[-1] == '1':
-        keys.append('TimeLow')
-        keys.append('TimeHigh')
+        keys.append('Time')
 
     # bit 1: settings uint32
     if channelsAndFormat[-2] == '1':
@@ -98,7 +97,9 @@ def read_header(path_bin):
     dt_tcp = []
 
     for k in keys:
-        if k.startswith('Time') or k.startswith('Settings'):
+        if k.startswith('Time'):
+            dt_tcp.append((k, 'uint64'))
+        elif k.startswith('Settings'):
             dt_tcp.append((k, 'i4'))
         elif k.startswith('DAC'):
             if dac_short:
@@ -174,7 +175,7 @@ class VTrigger():
         triggers_dac = []
         for i, k in enumerate(self.dac_channels):
             triggers_dac.append(self.trigger(k, None, self.dac_bits,
-                                             fixed_var=self.dac_fixed_var[i]))
+                                             fixed_var=self.dac_fixed_var[i], square=True))
 
         triggers_adc = []
         for i, k in enumerate(self.adc_channels):
@@ -183,17 +184,21 @@ class VTrigger():
 
         return triggers_dac, triggers_adc
 
-    def trigger(self, key, filter, bits, fixed_var=0):
+    def trigger(self, key, filter, bits, fixed_var=0, square=False):
         mean, variance = None, None
-        signal, heights, all_means, all_vars, time_high, time_low = [], [], [], [], [], []
+        signal, heights, all_means, all_vars, time = [], [], [], [], []
         if filter is not None:
             filter_length = filter.shape[0]
             overlap = np.zeros(filter_length - 1)
+        if square is None:
+            square = 'DAC' in key
         for b in trange(self.nmbr_batches):
             data = np.fromfile(self.path, dtype=self.dt_tcp, count=self.batchsize,
                                offset=self.header.nbytes + b * self.batchsize * self.dt_tcp.itemsize)
 
             stream = volt(data[key], bits=bits)
+            if square == True:
+                stream **= 2
             if filter is not None:
                 stream = oaconvolve(stream, filter, mode='full')
                 stream[:filter_length - 1] += overlap
@@ -213,13 +218,14 @@ class VTrigger():
             heights.extend(heights_)
             all_means.extend(all_means_)
             all_vars.extend(all_vars_)
-            if 'TimeHigh' in self.keys and 'TimeLow' in self.keys:
-                time_high.extend(data['TimeHigh'][signal_])
-                time_low.extend(data['TimeLow'][signal_])
+            if 'Time' in self.keys and 'Time' in self.keys:
+                time.extend(data['Time'][signal_])
 
         signal = np.array(signal)
         heights = np.array(heights)
         all_means = np.array(all_means)
         all_vars = np.array(all_vars)
 
-        return signal, heights, all_means, all_vars, time_high, time_low
+        print(f'{signal.shape[0]} triggered in {key}')
+
+        return signal, heights, all_means, all_vars, time
